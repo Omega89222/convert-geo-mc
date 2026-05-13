@@ -2,13 +2,16 @@ import './styles.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
+  ArrowRightLeft,
   Box,
+  CircleCheck,
   Copy,
   Download,
   FileJson,
   Grid,
   Image,
   RotateCcw,
+  TriangleAlert,
   createIcons,
 } from 'lucide';
 
@@ -87,6 +90,7 @@ const sampleModel = {
 };
 
 const els = {
+  conversionDirection: document.querySelector('#conversionDirection'),
   identifier: document.querySelector('#identifier'),
   modelInput: document.querySelector('#modelInput'),
   textureInput: document.querySelector('#textureInput'),
@@ -99,8 +103,13 @@ const els = {
   boneCount: document.querySelector('#boneCount'),
   textureSize: document.querySelector('#textureSize'),
   warningList: document.querySelector('#warningList'),
+  outputTitle: document.querySelector('#outputTitle'),
   outputJson: document.querySelector('#outputJson'),
   exportStatus: document.querySelector('#exportStatus'),
+  conversionNotice: document.querySelector('#conversionNotice'),
+  conversionNoticeTitle: document.querySelector('#conversionNoticeTitle'),
+  conversionNoticeMeta: document.querySelector('#conversionNoticeMeta'),
+  convertButton: document.querySelector('#convertButton'),
   copyOutput: document.querySelector('#copyOutput'),
   downloadOutput: document.querySelector('#downloadOutput'),
   resetCamera: document.querySelector('#resetCamera'),
@@ -119,6 +128,8 @@ const state = {
   effectiveTextureSize: { ...DEFAULT_TEXTURE_SIZE },
   converted: null,
   conversion: null,
+  previewModel: null,
+  outputFormat: null,
   gridVisible: true,
 };
 
@@ -132,13 +143,16 @@ let animationFrame;
 
 createIcons({
   icons: {
+    ArrowRightLeft,
     Box,
+    CircleCheck,
     Copy,
     Download,
     FileJson,
     Grid,
     Image,
     RotateCcw,
+    TriangleAlert,
   },
 });
 
@@ -146,10 +160,15 @@ initScene();
 bindEvents();
 applyDefaultTexture();
 els.gridToggle.classList.toggle('is-active', state.gridVisible);
-convertAndRender();
+syncDirectionUI();
+setPendingConversion('Prêt à convertir', "Modèle d'exemple chargé");
 
 function bindEvents() {
-  els.identifier.addEventListener('input', convertAndRender);
+  els.identifier.addEventListener('input', () => setPendingConversion('Prêt à convertir', 'Identifiant modifié'));
+  els.conversionDirection.addEventListener('change', () => {
+    syncDirectionUI();
+    setPendingConversion('Prêt à convertir', 'Sens de conversion modifié');
+  });
   els.modelInput.addEventListener('change', () => {
     const [file] = els.modelInput.files;
     if (file) readModelFile(file);
@@ -158,6 +177,7 @@ function bindEvents() {
     const [file] = els.textureInput.files;
     if (file) readTextureFile(file);
   });
+  els.convertButton.addEventListener('click', convertAndRender);
   els.copyOutput.addEventListener('click', copyOutput);
   els.downloadOutput.addEventListener('click', downloadOutput);
   els.resetCamera.addEventListener('click', resetCamera);
@@ -182,6 +202,47 @@ function setupDropZone(element, onFile) {
   });
 }
 
+function inferDirectionFromModel(model) {
+  if (Array.isArray(model?.['minecraft:geometry']) || Array.isArray(model?.bones)) {
+    return 'to-java';
+  }
+  return 'to-bedrock';
+}
+
+function syncDirectionUI() {
+  const exportsJava = els.conversionDirection.value === 'to-java';
+  els.outputTitle.textContent = exportsJava ? 'Java model JSON' : 'Bedrock .geo.json';
+}
+
+function setPendingConversion(title, meta) {
+  state.converted = null;
+  state.conversion = null;
+  state.previewModel = null;
+  state.outputFormat = null;
+  state.effectiveTextureSize = { ...DEFAULT_TEXTURE_SIZE };
+
+  clearGroup(modelGroup);
+  els.outputJson.value = '';
+  els.exportStatus.textContent = 'En attente';
+  els.exportStatus.classList.remove('is-success', 'is-error');
+  els.conversionNotice.classList.remove('is-success', 'is-error');
+  els.conversionNotice.classList.add('is-pending');
+  els.conversionNoticeTitle.textContent = title;
+  els.conversionNoticeMeta.textContent = meta;
+  els.previewTitle.textContent = 'Aperçu 3D';
+  els.sourceFormat.textContent = detectSourceFormatName(state.sourceJson);
+  els.cubeCount.textContent = '0';
+  els.boneCount.textContent = '0';
+  els.textureSize.textContent = `${state.textureSize.width} x ${state.textureSize.height}`;
+  els.warningList.innerHTML = '';
+  setExportActionsDisabled(true);
+}
+
+function setExportActionsDisabled(disabled) {
+  els.copyOutput.disabled = disabled;
+  els.downloadOutput.disabled = disabled;
+}
+
 async function readModelFile(file) {
   try {
     const text = await file.text();
@@ -189,7 +250,9 @@ async function readModelFile(file) {
     state.sourceName = file.name;
     els.modelFileName.textContent = file.name;
     syncIdentifierFromModel(state.sourceJson, file.name);
-    convertAndRender();
+    els.conversionDirection.value = inferDirectionFromModel(state.sourceJson);
+    syncDirectionUI();
+    setPendingConversion('Prêt à convertir', `${file.name} chargé`);
   } catch (error) {
     showError(`Modèle illisible: ${error.message}`);
   }
@@ -209,12 +272,12 @@ async function readTextureFile(file) {
     const texture = new THREE.Texture(image);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.needsUpdate = true;
-  state.texture = texture;
-  state.hasCustomTexture = true;
-  els.textureFileName.textContent = file.name;
-  convertAndRender();
+    texture.minFilter = THREE.NearestFilter;
+    texture.needsUpdate = true;
+    state.texture = texture;
+    state.hasCustomTexture = true;
+    els.textureFileName.textContent = file.name;
+    setPendingConversion('Prêt à convertir', `${file.name} chargé`);
   };
   image.onerror = () => {
     URL.revokeObjectURL(url);
@@ -274,6 +337,7 @@ function convertAndRender() {
     const identifier = sanitizeIdentifier(els.identifier.value);
     els.identifier.value = identifier;
     const conversion = convertModel(state.sourceJson, {
+      direction: els.conversionDirection.value,
       identifier,
       textureWidth: state.hasCustomTexture ? state.textureSize.width : undefined,
       textureHeight: state.hasCustomTexture ? state.textureSize.height : undefined,
@@ -281,9 +345,11 @@ function convertAndRender() {
     });
     state.conversion = conversion;
     state.converted = conversion.output;
-    state.effectiveTextureSize = getOutputTextureSize(conversion.output);
+    state.previewModel = conversion.preview || conversion.output;
+    state.outputFormat = conversion.outputFormat;
+    state.effectiveTextureSize = getPreviewTextureSize(conversion);
     renderOutput(conversion);
-    renderModel(conversion.output);
+    renderModel(state.previewModel);
     updateStats(conversion);
   } catch (error) {
     showError(error.message);
@@ -295,6 +361,14 @@ function convertModel(input, options) {
     throw new Error('Le JSON doit contenir un objet.');
   }
 
+  if (options.direction === 'to-java') {
+    return convertBedrockModelToJava(input, options);
+  }
+
+  return convertModelToBedrock(input, options);
+}
+
+function convertModelToBedrock(input, options) {
   if (Array.isArray(input['minecraft:geometry'])) {
     return normalizeBedrockGeometry(input, options);
   }
@@ -324,6 +398,174 @@ function convertModel(input, options) {
   }
 
   throw new Error('Format non reconnu: utilisez un modèle Java JSON, .bbmodel ou .geo.json.');
+}
+
+function convertBedrockModelToJava(input, options) {
+  if (!Array.isArray(input['minecraft:geometry']) && !Array.isArray(input.bones)) {
+    throw new Error('Format Bedrock requis pour convertir vers Java.');
+  }
+
+  const bedrockInput = Array.isArray(input['minecraft:geometry'])
+    ? input
+    : {
+        format_version: '1.12.0',
+        'minecraft:geometry': [
+          {
+            description: {
+              identifier: options.identifier,
+              texture_width: options.textureWidth,
+              texture_height: options.textureHeight,
+            },
+            bones: input.bones,
+          },
+        ],
+      };
+  const normalized = normalizeBedrockGeometry(bedrockInput, {
+    ...options,
+    sourceFormat: Array.isArray(input.bones) ? 'Bones JSON' : 'Bedrock/GeckoLib geo',
+  });
+  const warnings = [...normalized.warnings];
+  const output = convertBedrockGeometryToJavaElements(normalized.output, {
+    ...options,
+    warnings,
+  });
+
+  return {
+    output,
+    preview: normalized.output,
+    outputFormat: 'java',
+    targetFormat: 'Java model JSON',
+    sourceFormat: normalized.sourceFormat,
+    warnings,
+    stats: normalized.stats,
+  };
+}
+
+function convertBedrockGeometryToJavaElements(bedrockOutput, options) {
+  const geometry = getFirstGeometry(bedrockOutput);
+  if (!geometry) {
+    throw new Error('Le fichier geo ne contient aucune géométrie.');
+  }
+
+  const description = geometry.description || {};
+  const textureSize = {
+    width: Number(description.texture_width) || options.textureWidth || DEFAULT_TEXTURE_SIZE.width,
+    height: Number(description.texture_height) || options.textureHeight || DEFAULT_TEXTURE_SIZE.height,
+  };
+  const elements = [];
+
+  for (const bone of geometry.bones || []) {
+    const bonePivot = normalizeVector(bone.pivot, 3, [0, 0, 0]);
+    const hasNonZeroPivot = bonePivot.some((value) => value !== 0);
+    if (bone.parent || hasNonZeroPivot) {
+      options.warnings.push('Hiérarchie et pivots Bedrock aplatis dans le JSON Java.');
+    }
+    if (bone.rotation?.some((value) => value !== 0)) {
+      options.warnings.push('Rotation de bone Bedrock non exportée en rotation Java.');
+    }
+
+    (bone.cubes || []).forEach((cube, index) => {
+      const element = convertBedrockCubeToJavaElement(cube, bone, index, options);
+      if (element) elements.push(element);
+    });
+  }
+
+  if (!elements.length) {
+    throw new Error('Aucun cube Bedrock convertible trouvé.');
+  }
+
+  return cleanObject({
+    credit: `Converted from ${options.sourceName || description.identifier || 'Bedrock geometry'}`,
+    texture_size: [textureSize.width, textureSize.height],
+    textures: {
+      0: 'minecraft:block/converted_texture',
+    },
+    elements,
+  });
+}
+
+function convertBedrockCubeToJavaElement(cube, bone, index, options) {
+  const origin = normalizeVector(cube.origin, 3);
+  const size = normalizeVector(cube.size, 3);
+  if (!origin || !size) return null;
+
+  const from = convertBedrockPointToJava(origin);
+  const to = roundVector([from[0] + size[0], from[1] + size[1], from[2] + size[2]]);
+  const element = {
+    name: `${sanitizeBoneName(bone.name || 'bone')}_${index + 1}`,
+    from,
+    to,
+    faces: convertBedrockUvToJavaFaces(cube.uv, size),
+  };
+  const rotation = convertBedrockRotationToJava(cube.rotation, cube.pivot || bone.pivot, options);
+
+  if (rotation) {
+    element.rotation = rotation;
+  }
+
+  if (cube.mirror) {
+    options.warnings.push('La propriété Bedrock mirror est ignorée dans le JSON Java.');
+  }
+
+  return cleanObject(element);
+}
+
+function convertBedrockRotationToJava(rotation, pivot, options) {
+  const vector = normalizeVector(rotation, 3, [0, 0, 0]);
+  const activeAxes = vector
+    .map((angle, index) => ({ angle, index }))
+    .filter(({ angle }) => angle !== 0);
+  if (!activeAxes.length) return undefined;
+
+  if (activeAxes.length > 1) {
+    options.warnings.push('Java ne supporte qu’un axe de rotation par cube; seul le premier est exporté.');
+  }
+
+  const { angle, index } = activeAxes[0];
+  return {
+    origin: convertBedrockPointToJava(normalizeVector(pivot, 3, [0, 0, 0])),
+    axis: ['x', 'y', 'z'][index],
+    angle: roundNumber(angle),
+  };
+}
+
+function convertBedrockUvToJavaFaces(uv, cubeSize) {
+  const faces = {};
+
+  for (const faceName of FACE_NAMES) {
+    const rect = getJavaUvRect(uv, faceName, cubeSize);
+    faces[faceName] = {
+      uv: roundVector([rect.u, rect.v, rect.u + rect.width, rect.v + rect.height]),
+      texture: '#0',
+    };
+  }
+
+  return faces;
+}
+
+function getJavaUvRect(uv, faceName, cubeSize) {
+  const faceSize = getFaceSize(faceName, cubeSize);
+
+  if (uv && !Array.isArray(uv) && uv[faceName]) {
+    const face = uv[faceName];
+    const [u, v] = normalizeVector(face.uv, 2, [0, 0]);
+    const [width, height] = normalizeVector(face.uv_size, 2, faceSize);
+    return { u, v, width, height };
+  }
+
+  if (Array.isArray(uv)) {
+    const [u, v] = normalizeVector(uv, 2, [0, 0]);
+    return getBoxUvRect(faceName, u, v, faceSize);
+  }
+
+  return { u: 0, v: 0, width: faceSize[0], height: faceSize[1] };
+}
+
+function getFaceSize(faceName, cubeSize) {
+  const [width, height, depth] = cubeSize;
+  if (faceName === 'east' || faceName === 'west') return [depth, height];
+  if (faceName === 'up' || faceName === 'down') return [width, depth];
+  return [width, height];
 }
 
 function normalizeBedrockGeometry(input, options) {
@@ -366,6 +608,9 @@ function normalizeBedrockGeometry(input, options) {
 
   return {
     output,
+    preview: output,
+    outputFormat: 'bedrock',
+    targetFormat: 'Bedrock .geo.json',
     sourceFormat: options.sourceFormat || 'Bedrock/GeckoLib geo',
     warnings,
     stats: computeStats(output),
@@ -474,6 +719,9 @@ function convertElementModel(input, options) {
 
   return {
     output: cleanObject(output),
+    preview: cleanObject(output),
+    outputFormat: 'bedrock',
+    targetFormat: 'Bedrock .geo.json',
     sourceFormat: detectElementFormat(input),
     warnings,
     stats: computeStats(output),
@@ -598,6 +846,13 @@ function detectElementFormat(input) {
   return 'Java block/item JSON';
 }
 
+function detectSourceFormatName(input) {
+  if (Array.isArray(input?.['minecraft:geometry'])) return 'Bedrock/GeckoLib geo';
+  if (Array.isArray(input?.bones)) return 'Bones JSON';
+  if (Array.isArray(input?.elements)) return detectElementFormat(input);
+  return 'Format inconnu';
+}
+
 function getTextureSizeFromModel(input, options) {
   if (options.textureWidth && options.textureHeight) {
     return { width: options.textureWidth, height: options.textureHeight };
@@ -638,9 +893,25 @@ function getOutputTextureSize(output) {
   };
 }
 
+function getPreviewTextureSize(conversion) {
+  if (conversion.preview) return getOutputTextureSize(conversion.preview);
+  if (Array.isArray(conversion.output?.texture_size)) {
+    return {
+      width: Number(conversion.output.texture_size[0]) || DEFAULT_TEXTURE_SIZE.width,
+      height: Number(conversion.output.texture_size[1]) || DEFAULT_TEXTURE_SIZE.height,
+    };
+  }
+  return getOutputTextureSize(conversion.output);
+}
+
 function convertJavaPointToBedrock(point) {
   const vector = normalizeVector(point, 3, [0, 0, 0]);
   return roundVector([vector[0] - 8, vector[1], vector[2] - 8]);
+}
+
+function convertBedrockPointToJava(point) {
+  const vector = normalizeVector(point, 3, [0, 0, 0]);
+  return roundVector([vector[0] + 8, vector[1], vector[2] + 8]);
 }
 
 function sanitizeIdentifier(value) {
@@ -1010,7 +1281,21 @@ function animate() {
 
 function renderOutput(conversion) {
   els.outputJson.value = JSON.stringify(conversion.output, null, 2);
-  els.exportStatus.textContent = `${conversion.stats.cubeCount} cube(s) converti(s)`;
+  const warningCount = new Set(conversion.warnings).size;
+  const statusText = `${conversion.stats.cubeCount} cube(s), ${conversion.stats.boneCount} bone(s)`;
+
+  els.outputTitle.textContent = conversion.targetFormat;
+  els.exportStatus.textContent = `Conversion réussie - ${statusText}`;
+  els.exportStatus.classList.remove('is-error');
+  els.exportStatus.classList.add('is-success');
+
+  els.conversionNotice.classList.remove('is-pending', 'is-error');
+  els.conversionNotice.classList.add('is-success');
+  els.conversionNoticeTitle.textContent = 'Conversion réussie';
+  els.conversionNoticeMeta.textContent = `${conversion.targetFormat} - ${statusText} - ${conversion.sourceFormat}${
+    warningCount ? ` - ${warningCount} avertissement(s)` : ''
+  }`;
+  setExportActionsDisabled(false);
 }
 
 function updateStats(conversion) {
@@ -1018,7 +1303,8 @@ function updateStats(conversion) {
   els.cubeCount.textContent = String(conversion.stats.cubeCount);
   els.boneCount.textContent = String(conversion.stats.boneCount);
   els.textureSize.textContent = `${state.effectiveTextureSize.width} x ${state.effectiveTextureSize.height}`;
-  els.previewTitle.textContent = conversion.output['minecraft:geometry'][0]?.description?.identifier || 'Aperçu 3D';
+  els.previewTitle.textContent =
+    getFirstGeometry(conversion.preview || conversion.output)?.description?.identifier || 'Aperçu 3D';
 
   els.warningList.innerHTML = '';
   const uniqueWarnings = [...new Set(conversion.warnings)].slice(0, 6);
@@ -1031,7 +1317,22 @@ function updateStats(conversion) {
 }
 
 function showError(message) {
-  els.exportStatus.textContent = 'Erreur';
+  state.converted = null;
+  state.conversion = null;
+  state.previewModel = null;
+  state.outputFormat = null;
+  clearGroup(modelGroup);
+  els.outputJson.value = '';
+  els.exportStatus.textContent = 'Erreur de conversion';
+  els.exportStatus.classList.remove('is-success');
+  els.exportStatus.classList.add('is-error');
+
+  els.conversionNotice.classList.remove('is-pending', 'is-success');
+  els.conversionNotice.classList.add('is-error');
+  els.conversionNoticeTitle.textContent = 'Conversion impossible';
+  els.conversionNoticeMeta.textContent = message;
+  setExportActionsDisabled(true);
+
   els.warningList.innerHTML = '';
   const item = document.createElement('div');
   item.className = 'warning-item';
@@ -1040,6 +1341,7 @@ function showError(message) {
 }
 
 async function copyOutput() {
+  if (!state.converted) return;
   await navigator.clipboard.writeText(els.outputJson.value);
   const previous = els.copyOutput.innerHTML;
   els.copyOutput.textContent = 'Copié';
@@ -1050,8 +1352,11 @@ async function copyOutput() {
 }
 
 function downloadOutput() {
-  const identifier = state.converted?.['minecraft:geometry']?.[0]?.description?.identifier || 'geometry.converted_model';
-  const filename = `${identifier.replace(/^geometry\./, '').replace(/[^a-z0-9_.-]/gi, '_')}.geo.json`;
+  if (!state.converted) return;
+  const identifier =
+    getFirstGeometry(state.conversion?.preview)?.description?.identifier || els.identifier.value || 'geometry.converted_model';
+  const baseName = identifier.replace(/^geometry\./, '').replace(/[^a-z0-9_.-]/gi, '_') || 'converted_model';
+  const filename = state.outputFormat === 'java' ? `${baseName}.json` : `${baseName}.geo.json`;
   const blob = new Blob([els.outputJson.value], { type: 'application/json' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);

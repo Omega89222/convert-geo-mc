@@ -12,12 +12,20 @@
           <span class="brand-mark" aria-hidden="true"></span>
           <div>
             <h1>Geo Converter</h1>
-            <p>Java vers Bedrock</p>
+            <p>Java / Bedrock</p>
           </div>
         </div>
 
         <section class="section">
-          <label class="field-label" for="identifier">Identifiant Bedrock</label>
+          <label class="field-label" for="conversionDirection">Sens de conversion</label>
+          <select id="conversionDirection" class="text-input select-input">
+            <option value="to-bedrock">Java / Blockbench vers Bedrock</option>
+            <option value="to-java">Bedrock .geo.json vers Java</option>
+          </select>
+        </section>
+
+        <section class="section">
+          <label class="field-label" for="identifier">Identifiant modèle</label>
           <input id="identifier" class="text-input" value="geometry.converted_model" spellcheck="false" />
         </section>
 
@@ -26,7 +34,7 @@
             <input id="modelInput" type="file" accept=".json,.geo.json,.bbmodel,application/json" />
             <span class="drop-icon"><i data-lucide="file-json"></i></span>
             <span class="drop-title">Modèle JSON</span>
-            <span class="drop-meta" id="modelFileName">Aucun fichier sélectionné</span>
+            <span class="drop-meta" id="modelFileName">Modèle d'exemple chargé</span>
           </label>
         </section>
 
@@ -37,6 +45,13 @@
             <span class="drop-title">Texture</span>
             <span class="drop-meta" id="textureFileName">Texture de prévisualisation</span>
           </label>
+        </section>
+
+        <section class="section">
+          <button class="command-button primary convert-button" id="convertButton" type="button">
+            <i data-lucide="arrow-right-left"></i>
+            <span>Convertir</span>
+          </button>
         </section>
 
         <section class="section compact-grid">
@@ -76,27 +91,37 @@
             </button>
           </div>
         </div>
-        <div id="preview" class="preview-canvas" aria-label="Rendu 3D"></div>
+        <div id="preview" class="preview-canvas" aria-label="Rendu 3D">
+          <div id="conversionNotice" class="conversion-notice is-pending" role="status" aria-live="polite">
+            <span class="notice-icon notice-icon-pending" aria-hidden="true"><i data-lucide="arrow-right-left"></i></span>
+            <span class="notice-icon notice-icon-success" aria-hidden="true"><i data-lucide="circle-check"></i></span>
+            <span class="notice-icon notice-icon-error" aria-hidden="true"><i data-lucide="triangle-alert"></i></span>
+            <span class="notice-copy">
+              <strong id="conversionNoticeTitle">Prêt à convertir</strong>
+              <span id="conversionNoticeMeta">Modèle d'exemple chargé</span>
+            </span>
+          </div>
+        </div>
       </main>
 
       <aside class="panel export-panel" aria-label="Export">
         <div class="export-head">
           <div>
-            <h2>Bedrock .geo.json</h2>
-            <p id="exportStatus">Prêt</p>
+            <h2 id="outputTitle">Bedrock .geo.json</h2>
+            <p id="exportStatus" class="status-line">En attente</p>
           </div>
           <div class="toolbar">
-            <button class="command-button" id="copyOutput" type="button">
+            <button class="command-button" id="copyOutput" type="button" disabled>
               <i data-lucide="copy"></i>
               Copier
             </button>
-            <button class="command-button primary" id="downloadOutput" type="button">
+            <button class="command-button primary" id="downloadOutput" type="button" disabled>
               <i data-lucide="download"></i>
               Télécharger
             </button>
           </div>
         </div>
-        <textarea id="outputJson" class="output-json" spellcheck="false" aria-label="JSON Bedrock converti"></textarea>
+        <textarea id="outputJson" class="output-json" spellcheck="false" aria-label="JSON converti"></textarea>
       </aside>
     </div>
 
