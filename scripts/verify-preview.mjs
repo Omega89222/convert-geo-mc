@@ -49,6 +49,7 @@ try {
     await page.goto(url, { waitUntil: 'networkidle' });
     await page.waitForSelector('canvas');
 
+    await assertPanelToggles(page, config.name);
     await assertWaitingForClick(page, config.name);
 
     await page.click('#convertButton');
@@ -177,6 +178,46 @@ async function assertWaitingForClick(page, viewportName) {
   if (!ok) {
     throw new Error(`${viewportName} waiting state check failed: ${JSON.stringify(waiting)}`);
   }
+}
+
+async function assertPanelToggles(page, viewportName) {
+  await page.click('#toggleLeftPanel');
+  await page.waitForTimeout(120);
+  let panels = await getPanelState(page);
+  if (!panels.leftCollapsed || panels.importDisplay !== 'none') {
+    throw new Error(`${viewportName} left panel toggle failed: ${JSON.stringify(panels)}`);
+  }
+
+  await page.click('#toggleRightPanel');
+  await page.waitForTimeout(120);
+  panels = await getPanelState(page);
+  if (!panels.rightCollapsed || panels.exportDisplay !== 'none') {
+    throw new Error(`${viewportName} right panel toggle failed: ${JSON.stringify(panels)}`);
+  }
+
+  await page.click('#toggleLeftPanel');
+  await page.click('#toggleRightPanel');
+  await page.waitForTimeout(120);
+  panels = await getPanelState(page);
+  if (panels.leftCollapsed || panels.rightCollapsed || panels.importDisplay === 'none' || panels.exportDisplay === 'none') {
+    throw new Error(`${viewportName} panel restore failed: ${JSON.stringify(panels)}`);
+  }
+}
+
+async function getPanelState(page) {
+  return page.evaluate(() => {
+    const shell = document.querySelector('.app-shell');
+    const importPanel = document.querySelector('.import-panel');
+    const exportPanel = document.querySelector('.export-panel');
+    return {
+      leftCollapsed: shell.classList.contains('is-left-collapsed'),
+      rightCollapsed: shell.classList.contains('is-right-collapsed'),
+      importDisplay: getComputedStyle(importPanel).display,
+      exportDisplay: getComputedStyle(exportPanel).display,
+      leftLabel: document.querySelector('#toggleLeftPanel').getAttribute('aria-label'),
+      rightLabel: document.querySelector('#toggleRightPanel').getAttribute('aria-label'),
+    };
+  });
 }
 
 async function assertPreviewHasPixels(page, viewportName, label) {

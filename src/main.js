@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
   ArrowRightLeft,
   Box,
+  ChevronsLeft,
+  ChevronsRight,
   CircleCheck,
   Copy,
   Download,
@@ -90,6 +92,7 @@ const sampleModel = {
 };
 
 const els = {
+  appShell: document.querySelector('.app-shell'),
   conversionDirection: document.querySelector('#conversionDirection'),
   identifier: document.querySelector('#identifier'),
   modelInput: document.querySelector('#modelInput'),
@@ -112,6 +115,8 @@ const els = {
   convertButton: document.querySelector('#convertButton'),
   copyOutput: document.querySelector('#copyOutput'),
   downloadOutput: document.querySelector('#downloadOutput'),
+  toggleLeftPanel: document.querySelector('#toggleLeftPanel'),
+  toggleRightPanel: document.querySelector('#toggleRightPanel'),
   resetCamera: document.querySelector('#resetCamera'),
   gridToggle: document.querySelector('#gridToggle'),
   preview: document.querySelector('#preview'),
@@ -131,6 +136,8 @@ const state = {
   previewModel: null,
   outputFormat: null,
   gridVisible: true,
+  leftPanelVisible: true,
+  rightPanelVisible: true,
 };
 
 let scene;
@@ -145,6 +152,8 @@ createIcons({
   icons: {
     ArrowRightLeft,
     Box,
+    ChevronsLeft,
+    ChevronsRight,
     CircleCheck,
     Copy,
     Download,
@@ -160,6 +169,7 @@ initScene();
 bindEvents();
 applyDefaultTexture();
 els.gridToggle.classList.toggle('is-active', state.gridVisible);
+updatePanelVisibility();
 syncDirectionUI();
 setPendingConversion('Prêt à convertir', "Modèle d'exemple chargé");
 
@@ -180,6 +190,8 @@ function bindEvents() {
   els.convertButton.addEventListener('click', convertAndRender);
   els.copyOutput.addEventListener('click', copyOutput);
   els.downloadOutput.addEventListener('click', downloadOutput);
+  els.toggleLeftPanel.addEventListener('click', () => toggleSidePanel('left'));
+  els.toggleRightPanel.addEventListener('click', () => toggleSidePanel('right'));
   els.resetCamera.addEventListener('click', resetCamera);
   els.gridToggle.addEventListener('click', toggleGrid);
   window.addEventListener('resize', resizeRenderer);
@@ -1264,6 +1276,36 @@ function toggleGrid() {
   state.gridVisible = !state.gridVisible;
   gridHelper.visible = state.gridVisible;
   els.gridToggle.classList.toggle('is-active', state.gridVisible);
+}
+
+function toggleSidePanel(side) {
+  if (side === 'left') {
+    state.leftPanelVisible = !state.leftPanelVisible;
+  } else {
+    state.rightPanelVisible = !state.rightPanelVisible;
+  }
+
+  updatePanelVisibility();
+  window.requestAnimationFrame(() => {
+    resizeRenderer();
+    frameModel();
+  });
+}
+
+function updatePanelVisibility() {
+  els.appShell.classList.toggle('is-left-collapsed', !state.leftPanelVisible);
+  els.appShell.classList.toggle('is-right-collapsed', !state.rightPanelVisible);
+  updatePanelToggleButton(els.toggleLeftPanel, state.leftPanelVisible, 'gauche');
+  updatePanelToggleButton(els.toggleRightPanel, state.rightPanelVisible, 'droit');
+}
+
+function updatePanelToggleButton(button, isVisible, label) {
+  const action = isVisible ? 'Masquer' : 'Afficher';
+  const text = `${action} le panneau ${label}`;
+  button.classList.toggle('is-collapsed', !isVisible);
+  button.setAttribute('aria-label', text);
+  button.setAttribute('title', text);
+  button.setAttribute('aria-pressed', String(!isVisible));
 }
 
 function resizeRenderer() {
