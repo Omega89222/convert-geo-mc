@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Convertisseur Geo Minecraft</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="panel import-panel" aria-label="Import">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <h1>Geo Converter</h1>
+            <p>Java vers Bedrock</p>
+          </div>
+        </div>
+
+        <section class="section">
+          <label class="field-label" for="identifier">Identifiant Bedrock</label>
+          <input id="identifier" class="text-input" value="geometry.converted_model" spellcheck="false" />
+        </section>
+
+        <section class="section">
+          <label class="file-drop" id="modelDrop" for="modelInput">
+            <input id="modelInput" type="file" accept=".json,.geo.json,.bbmodel,application/json" />
+            <span class="drop-icon"><i data-lucide="file-json"></i></span>
+            <span class="drop-title">Modèle JSON</span>
+            <span class="drop-meta" id="modelFileName">Aucun fichier sélectionné</span>
+          </label>
+        </section>
+
+        <section class="section">
+          <label class="file-drop texture-drop" id="textureDrop" for="textureInput">
+            <input id="textureInput" type="file" accept="image/png,image/jpeg,image/webp" />
+            <span class="drop-icon"><i data-lucide="image"></i></span>
+            <span class="drop-title">Texture</span>
+            <span class="drop-meta" id="textureFileName">Texture de prévisualisation</span>
+          </label>
+        </section>
+
+        <section class="section compact-grid">
+          <div>
+            <span class="metric-label">Format</span>
+            <strong id="sourceFormat">Java JSON</strong>
+          </div>
+          <div>
+            <span class="metric-label">Cubes</span>
+            <strong id="cubeCount">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">Bones</span>
+            <strong id="boneCount">0</strong>
+          </div>
+          <div>
+            <span class="metric-label">Texture</span>
+            <strong id="textureSize">64 x 64</strong>
+          </div>
+        </section>
+
+        <section class="section warning-list" id="warningList" aria-live="polite"></section>
+      </aside>
+
+      <main class="viewport-panel">
+        <div class="topbar">
+          <div class="topbar-title">
+            <i data-lucide="box"></i>
+            <span id="previewTitle">Aperçu 3D</span>
+          </div>
+          <div class="toolbar">
+            <button class="icon-button" id="gridToggle" type="button" aria-label="Afficher la grille" title="Afficher la grille">
+              <i data-lucide="grid"></i>
+            </button>
+            <button class="icon-button" id="resetCamera" type="button" aria-label="Réinitialiser la caméra" title="Réinitialiser la caméra">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+          </div>
+        </div>
+        <div id="preview" class="preview-canvas" aria-label="Rendu 3D"></div>
+      </main>
+
+      <aside class="panel export-panel" aria-label="Export">
+        <div class="export-head">
+          <div>
+            <h2>Bedrock .geo.json</h2>
+            <p id="exportStatus">Prêt</p>
+          </div>
+          <div class="toolbar">
+            <button class="command-button" id="copyOutput" type="button">
+              <i data-lucide="copy"></i>
+              Copier
+            </button>
+            <button class="command-button primary" id="downloadOutput" type="button">
+              <i data-lucide="download"></i>
+              Télécharger
+            </button>
+          </div>
+        </div>
+        <textarea id="outputJson" class="output-json" spellcheck="false" aria-label="JSON Bedrock converti"></textarea>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

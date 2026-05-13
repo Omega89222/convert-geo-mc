@@ -1,0 +1,20 @@
+{
+  "name": "convert-minecraft",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "verify": "node scripts/verify-preview.mjs"
+  },
+  "dependencies": {
+    "lucide": "^0.468.0",
+    "three": "^0.165.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1",
+    "vite": "^8.0.12"
+  }
+}
